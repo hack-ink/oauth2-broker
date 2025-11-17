@@ -12,11 +12,12 @@ use oauth2::{
 	basic::{BasicClient, BasicErrorResponse, BasicRequestTokenError},
 };
 // self
+#[cfg(all(test, feature = "reqwest"))] use crate::http::ReqwestHttpClient;
 use crate::{
 	_prelude::*,
 	auth::{ScopeSet, TokenFamily, TokenRecord},
 	error::{ConfigError, TransientError, TransportError},
-	http::{ReqwestHttpClient, ResponseMetadata, ResponseMetadataSlot, TokenHttpClient},
+	http::{ResponseMetadata, ResponseMetadataSlot, TokenHttpClient},
 	provider::{
 		ClientAuthMethod, GrantType, ProviderDescriptor, ProviderErrorContext, ProviderErrorKind,
 		ProviderStrategy,
@@ -42,27 +43,6 @@ where
 		metadata: Option<&ResponseMetadata>,
 		error: HttpClientError<E>,
 	) -> Error;
-}
-
-/// Default mapper for reqwest-backed transports.
-#[derive(Clone, Debug, Default)]
-pub struct ReqwestTransportErrorMapper;
-impl TransportErrorMapper<ReqwestError> for ReqwestTransportErrorMapper {
-	fn map_transport_error(
-		&self,
-		strategy: &dyn ProviderStrategy,
-		grant: GrantType,
-		meta: Option<&ResponseMetadata>,
-		err: HttpClientError<ReqwestError>,
-	) -> Error {
-		match err {
-			HttpClientError::Reqwest(inner) => map_reqwest_error(strategy, grant, meta, *inner),
-			HttpClientError::Http(inner) => ConfigError::from(inner).into(),
-			HttpClientError::Io(inner) => TransportError::Io(inner).into(),
-			HttpClientError::Other(message) => map_generic_transport_error(meta, message),
-			_ => map_unknown_transport_error(meta),
-		}
-	}
 }
 
 pub(crate) trait OAuth2Facade {
@@ -107,7 +87,30 @@ pub(crate) trait OAuth2Facade {
 		'redirect: 'a;
 }
 
-pub(crate) struct BasicFacade<C = ReqwestHttpClient, M = ReqwestTransportErrorMapper>
+#[cfg(feature = "reqwest")]
+/// Default mapper for reqwest-backed transports.
+#[derive(Clone, Debug, Default)]
+pub struct ReqwestTransportErrorMapper;
+#[cfg(feature = "reqwest")]
+impl TransportErrorMapper<ReqwestError> for ReqwestTransportErrorMapper {
+	fn map_transport_error(
+		&self,
+		strategy: &dyn ProviderStrategy,
+		grant: GrantType,
+		meta: Option<&ResponseMetadata>,
+		err: HttpClientError<ReqwestError>,
+	) -> Error {
+		match err {
+			HttpClientError::Reqwest(inner) => map_reqwest_error(strategy, grant, meta, *inner),
+			HttpClientError::Http(inner) => ConfigError::from(inner).into(),
+			HttpClientError::Io(inner) => TransportError::Io(inner).into(),
+			HttpClientError::Other(message) => map_generic_transport_error(meta, message),
+			_ => map_unknown_transport_error(meta),
+		}
+	}
+}
+
+pub(crate) struct BasicFacade<C, M>
 where
 	C: ?Sized + TokenHttpClient,
 	M: ?Sized + TransportErrorMapper<C::TransportError>,
@@ -473,6 +476,7 @@ where
 	mapper.map_transport_error(strategy, grant, meta, err)
 }
 
+#[cfg(feature = "reqwest")]
 fn map_reqwest_error(
 	strategy: &dyn ProviderStrategy,
 	grant: GrantType,
@@ -523,11 +527,12 @@ fn meta_retry_after(meta: Option<&ResponseMetadata>) -> Option<Duration> {
 	meta.and_then(|value| value.retry_after)
 }
 
+#[cfg(feature = "reqwest")]
 fn reqwest_status(err: &ReqwestError) -> Option<u16> {
 	err.status().map(|code| code.as_u16())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "reqwest"))]
 mod tests {
 	// self
 	use super::*;

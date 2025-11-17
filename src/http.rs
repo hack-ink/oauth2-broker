@@ -11,11 +11,12 @@
 use std::ops::Deref;
 // crates.io
 use oauth2::{AsyncHttpClient, HttpClientError, HttpRequest, HttpResponse};
+#[cfg(feature = "reqwest")]
 use reqwest::{
 	Client, Error as ReqwestError,
 	header::{HeaderMap, RETRY_AFTER},
 };
-use time::format_description::well_known::Rfc2822;
+#[cfg(feature = "reqwest")] use time::format_description::well_known::Rfc2822;
 // self
 use crate::_prelude::*;
 
@@ -30,7 +31,10 @@ use crate::_prelude::*;
 /// they return must own whatever state is required so their request futures remain
 /// `Send` for the lifetime of the in-flight operation. This lets facade callers box
 /// the async blocks without worrying about borrowed transports.
-pub trait TokenHttpClient: Send + Sync + 'static {
+pub trait TokenHttpClient
+where
+	Self: 'static + Send + Sync,
+{
 	/// Concrete error emitted by the underlying transport.
 	type TransportError: 'static + Send + Sync + StdError;
 
@@ -102,8 +106,10 @@ impl ResponseMetadataSlot {
 /// endpoints return results directly instead of delegating to another URI. Configure
 /// any custom [`Client`] to disable redirect following, because the broker
 /// passes this client into the `oauth2` crate when it builds the facade layer.
+#[cfg(feature = "reqwest")]
 #[derive(Clone, Default)]
 pub struct ReqwestHttpClient(pub Client);
+#[cfg(feature = "reqwest")]
 impl ReqwestHttpClient {
 	/// Wraps an existing reqwest [`Client`].
 	pub fn with_client(client: Client) -> Self {
@@ -115,11 +121,13 @@ impl ReqwestHttpClient {
 		InstrumentedHandle::new(self.0.clone(), slot)
 	}
 }
+#[cfg(feature = "reqwest")]
 impl AsRef<Client> for ReqwestHttpClient {
 	fn as_ref(&self) -> &Client {
 		&self.0
 	}
 }
+#[cfg(feature = "reqwest")]
 impl Deref for ReqwestHttpClient {
 	type Target = Client;
 
@@ -128,25 +136,30 @@ impl Deref for ReqwestHttpClient {
 	}
 }
 
+#[cfg(feature = "reqwest")]
 /// Instrumented adapter that implements [`AsyncHttpClient`] for reqwest.
 pub(crate) struct InstrumentedHttpClient {
 	client: Client,
 	slot: ResponseMetadataSlot,
 }
+#[cfg(feature = "reqwest")]
 impl InstrumentedHttpClient {
 	fn new(client: Client, slot: ResponseMetadataSlot) -> Self {
 		Self { client, slot }
 	}
 }
 
+#[cfg(feature = "reqwest")]
 /// Public handle returned by [`ReqwestHttpClient`] that satisfies [`TokenHttpClient`].
 #[derive(Clone)]
 pub struct InstrumentedHandle(Arc<InstrumentedHttpClient>);
+#[cfg(feature = "reqwest")]
 impl InstrumentedHandle {
 	fn new(client: Client, slot: ResponseMetadataSlot) -> Self {
 		Self(Arc::new(InstrumentedHttpClient::new(client, slot)))
 	}
 }
+#[cfg(feature = "reqwest")]
 impl<'c> AsyncHttpClient<'c> for InstrumentedHandle {
 	type Error = HttpClientError<ReqwestError>;
 	type Future =
@@ -179,6 +192,7 @@ impl<'c> AsyncHttpClient<'c> for InstrumentedHandle {
 		})
 	}
 }
+#[cfg(feature = "reqwest")]
 impl TokenHttpClient for ReqwestHttpClient {
 	type Handle = InstrumentedHandle;
 	type TransportError = ReqwestError;
@@ -188,6 +202,7 @@ impl TokenHttpClient for ReqwestHttpClient {
 	}
 }
 
+#[cfg(feature = "reqwest")]
 fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
 	let value = headers.get(RETRY_AFTER)?;
 	let raw = value.to_str().ok()?.trim();

@@ -13,11 +13,17 @@ pub use refresh::*;
 // self
 use crate::{
 	_prelude::*,
-	http::{ReqwestHttpClient, TokenHttpClient},
-	oauth::{ReqwestTransportErrorMapper, TransportErrorMapper},
+	http::TokenHttpClient,
+	oauth::TransportErrorMapper,
 	provider::{ProviderDescriptor, ProviderStrategy},
 	store::{BrokerStore, StoreKey},
 };
+#[cfg(feature = "reqwest")]
+use crate::{http::ReqwestHttpClient, oauth::ReqwestTransportErrorMapper};
+
+#[cfg(feature = "reqwest")]
+/// Broker specialized for the crate's default reqwest transport stack.
+pub type ReqwestBroker = Broker<ReqwestHttpClient, ReqwestTransportErrorMapper>;
 
 /// Coordinates OAuth 2.0 flows against a single provider descriptor.
 ///
@@ -26,9 +32,8 @@ use crate::{
 /// (state + PKCE generation, code exchanges, refresh rotations, etc.). Client
 /// credentials are stored alongside the descriptor so client-auth methods can be
 /// applied consistently across token endpoints.
-
 #[derive(Clone)]
-pub struct Broker<C = ReqwestHttpClient, M = ReqwestTransportErrorMapper>
+pub struct Broker<C, M>
 where
 	C: ?Sized + TokenHttpClient,
 	M: ?Sized + TransportErrorMapper<C::TransportError>,
@@ -50,29 +55,6 @@ where
 	/// Shared metrics recorder for refresh flow outcomes.
 	pub refresh_metrics: Arc<RefreshMetrics>,
 	flow_guards: Arc<Mutex<HashMap<StoreKey, Arc<AsyncMutex<()>>>>>,
-}
-impl Broker {
-	/// Creates a new broker for the provided descriptor and client identifier.
-	///
-	/// The broker provisions its own reqwest-backed transport so callers do not need
-	/// to pass HTTP handles explicitly. Use [`Broker::with_client_secret`] to attach a confidential
-	/// client secret when the descriptor prefers `client_secret_basic` or
-	/// `client_secret_post`.
-	pub fn new(
-		store: Arc<dyn BrokerStore>,
-		descriptor: ProviderDescriptor,
-		strategy: Arc<dyn ProviderStrategy>,
-		client_id: impl Into<String>,
-	) -> Self {
-		Self::with_http_client(
-			store,
-			descriptor,
-			strategy,
-			client_id,
-			ReqwestHttpClient::default(),
-			Arc::new(ReqwestTransportErrorMapper),
-		)
-	}
 }
 impl<C, M> Broker<C, M>
 where
@@ -96,8 +78,8 @@ where
 			strategy,
 			client_id: client_id.into(),
 			client_secret: None,
-			flow_guards: Arc::new(Mutex::new(HashMap::new())),
-			refresh_metrics: Arc::new(RefreshMetrics::default()),
+			flow_guards: Default::default(),
+			refresh_metrics: Default::default(),
 		}
 	}
 
@@ -108,7 +90,30 @@ where
 		self
 	}
 }
-
+#[cfg(feature = "reqwest")]
+impl Broker<ReqwestHttpClient, ReqwestTransportErrorMapper> {
+	/// Creates a new broker for the provided descriptor and client identifier.
+	///
+	/// The broker provisions its own reqwest-backed transport so callers do not need
+	/// to pass HTTP handles explicitly. Use [`Broker::with_client_secret`] to attach a confidential
+	/// client secret when the descriptor prefers `client_secret_basic` or
+	/// `client_secret_post`.
+	pub fn new(
+		store: Arc<dyn BrokerStore>,
+		descriptor: ProviderDescriptor,
+		strategy: Arc<dyn ProviderStrategy>,
+		client_id: impl Into<String>,
+	) -> Self {
+		Self::with_http_client(
+			store,
+			descriptor,
+			strategy,
+			client_id,
+			ReqwestHttpClient::default(),
+			Arc::new(ReqwestTransportErrorMapper),
+		)
+	}
+}
 impl<C, M> Debug for Broker<C, M>
 where
 	C: ?Sized + TokenHttpClient,

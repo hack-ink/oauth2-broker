@@ -46,10 +46,8 @@ async fn main() -> Result<()> {
 	let scope = ScopeSet::new(["tweet.read", "tweet.write", "users.read", "offline.access"])?;
 	let mut broker = Broker::new(store, descriptor, strategy, client_id);
 
-	if let Some(secret) = client_secret {
-		if !secret.is_empty() {
-			broker = broker.with_client_secret(secret);
-		}
+	if let Some(secret) = client_secret.filter(|value| !value.is_empty()) {
+		broker = broker.with_client_secret(secret);
 	}
 
 	let session = broker.start_authorization(

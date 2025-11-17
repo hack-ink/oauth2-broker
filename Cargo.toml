@@ -19,7 +19,7 @@ inherits = "release"
 lto      = true
 
 [features]
-default = []
+default = ["reqwest"]
 test    = []
 
 [dependencies]
@@ -29,7 +29,7 @@ base64              = { version = "0.22" }
 oauth2              = { version = "5.0", default-features = false }
 parking_lot         = { version = "0.12" }
 rand                = { version = "0.9" }
-reqwest             = { version = "0.12", default-features = false, features = ["charset", "http2", "rustls-tls"] }
+reqwest             = { version = "0.12", optional = true, default-features = false, features = ["charset", "http2", "rustls-tls"] }
 serde               = { version = "1.0", features = ["derive"] }
 serde_json          = { version = "1.0" }
 serde_path_to_error = { version = "0.1" }
@@ -46,3 +46,15 @@ tracing = { version = "0.1", optional = true }
 color-eyre = { version = "0.6" }
 httpmock   = { version = "0.8", features = ["https"] }
 tokio      = { version = "1.48", features = ["macros", "rt-multi-thread", "time"] }
+
+[[example]]
+name              = "client_credentials"
+required-features = ["reqwest"]
+
+[[example]]
+name              = "start_authorization"
+required-features = ["reqwest"]
+
+[[example]]
+name              = "x_authorization"
+required-features = ["reqwest"]

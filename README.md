@@ -191,7 +191,8 @@ tweet when you run `cargo make example-x-authorization` with real client credent
   pair drives the internal `BasicFacade`, so every flow consistently works with custom transports.
 - Token requests are constructed internally from descriptors, grant types, and strategies, keeping
   the public API focused on OAuth concepts instead of HTTP primitives.
-- The crate always depends on `reqwest`, eliminating feature-flag drift between builds.
+- The default `reqwest` feature provisions the transport automatically so Quickstart snippets stay
+  zero-config, but you can disable it when wiring a custom `TokenHttpClient`.
 
 ### Extension traits
 
@@ -209,12 +210,21 @@ tweet when you run `cargo make example-x-authorization` with real client credent
 - Flows call into the observation helpers directly so downstream crates only need to opt into the
   features and provide their preferred subscriber/recorder configuration.
 
+## Feature Flags
+
+- `reqwest` *(default)* — Enables the bundled reqwest transport, `Broker::new`, integration test
+  helpers, and reqwest-based examples. Disable it (`--no-default-features` or
+  `default-features = false`) when you supply your own `TokenHttpClient` and mapper via
+  `Broker::with_http_client`.
+- `test` — Re-exports the `_preludet` helpers outside of `cfg(test)` so downstream crates can reuse
+  the integration harness.
+
 ## Custom HTTP Transports
 
 ### Default transport
 
 `Broker<C, M>` and the internal `BasicFacade<C, M>` are generic over both the transport and the
-mapper. Calling `Broker::new` instantiates those generics as
+mapper. Calling `Broker::new` (when the `reqwest` feature is enabled) instantiates those generics as
 `Broker<ReqwestHttpClient, ReqwestTransportErrorMapper>`, which keeps the Quickstart and HTTP-backed
 examples zero-config. `TokenHttpClient`, `ResponseMetadata`, `ResponseMetadataSlot`, and
 `TransportErrorMapper` are re-exported from the crate root so downstream crates can wire their own

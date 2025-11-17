@@ -118,6 +118,7 @@ impl ConfigError {
 		Self::HttpClientBuild { source: Box::new(src) }
 	}
 }
+#[cfg(feature = "reqwest")]
 impl From<reqwest::Error> for ConfigError {
 	fn from(e: reqwest::Error) -> Self {
 		Self::http_client_build(e)
@@ -167,6 +168,7 @@ impl TransportError {
 		Self::Network { source: Box::new(src) }
 	}
 }
+#[cfg(feature = "reqwest")]
 impl From<ReqwestError> for TransportError {
 	fn from(e: ReqwestError) -> Self {
 		Self::network(e)

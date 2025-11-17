@@ -1,3 +1,5 @@
+#![cfg(feature = "reqwest")]
+
 // crates.io
 use httpmock::prelude::*;
 // self

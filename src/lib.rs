@@ -12,7 +12,7 @@ pub mod oauth;
 pub mod obs;
 pub mod provider;
 pub mod store;
-#[cfg(any(test, feature = "test"))]
+#[cfg(all(any(test, feature = "test"), feature = "reqwest"))]
 pub mod _preludet {
 	//! Convenience re-exports and helpers for integration tests; enabled via `cfg(test)` or the
 	//! `test` crate feature.
@@ -25,7 +25,6 @@ pub mod _preludet {
 		http::ReqwestHttpClient,
 		oauth::ReqwestTransportErrorMapper,
 		provider::{DefaultProviderStrategy, ProviderDescriptor, ProviderStrategy},
-		reqwest::Client,
 		store::{BrokerStore, MemoryStore},
 	};
 
@@ -35,7 +34,7 @@ pub mod _preludet {
 	/// Builds a reqwest HTTP client that accepts the self-signed certificates produced by
 	/// `httpmock` during tests.
 	pub fn test_reqwest_http_client() -> ReqwestHttpClient {
-		let client = Client::builder()
+		let client = ReqwestClient::builder()
 			.danger_accept_invalid_certs(true)
 			.danger_accept_invalid_hostnames(true)
 			.build()
@@ -78,7 +77,8 @@ mod _prelude {
 
 	pub use async_lock::Mutex as AsyncMutex;
 	pub use parking_lot::{Mutex, RwLock};
-	pub use reqwest::Error as ReqwestError;
+	#[cfg(feature = "reqwest")]
+	pub use reqwest::{Client as ReqwestClient, Error as ReqwestError};
 	pub use serde::{Deserialize, Serialize};
 	pub use thiserror::Error as ThisError;
 	pub use time::{Duration, OffsetDateTime};
@@ -87,7 +87,6 @@ mod _prelude {
 	pub use crate::error::{Error, Result};
 }
 
-pub use reqwest;
+#[cfg(feature = "reqwest")] pub use reqwest;
 pub use url;
-
-#[cfg(test)] use {color_eyre as _, httpmock as _};
+#[cfg(all(test, feature = "reqwest"))] use {color_eyre as _, httpmock as _};

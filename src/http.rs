@@ -11,11 +11,7 @@
 use std::ops::Deref;
 // crates.io
 use oauth2::{AsyncHttpClient, HttpClientError, HttpRequest, HttpResponse};
-#[cfg(feature = "reqwest")]
-use reqwest::{
-	Client, Error as ReqwestError,
-	header::{HeaderMap, RETRY_AFTER},
-};
+#[cfg(feature = "reqwest")] use reqwest::header::{HeaderMap, RETRY_AFTER};
 #[cfg(feature = "reqwest")] use time::format_description::well_known::Rfc2822;
 // self
 use crate::_prelude::*;
@@ -101,18 +97,18 @@ impl ResponseMetadataSlot {
 	}
 }
 
-/// Thin wrapper around [`Client`] so shared HTTP behavior lives in one place.
+/// Thin wrapper around [`ReqwestClient`] so shared HTTP behavior lives in one place.
 /// Token requests should not follow redirects, matching OAuth 2.0 guidance that token
 /// endpoints return results directly instead of delegating to another URI. Configure
-/// any custom [`Client`] to disable redirect following, because the broker
+/// any custom [`ReqwestClient`] to disable redirect following, because the broker
 /// passes this client into the `oauth2` crate when it builds the facade layer.
 #[cfg(feature = "reqwest")]
 #[derive(Clone, Default)]
-pub struct ReqwestHttpClient(pub Client);
+pub struct ReqwestHttpClient(pub ReqwestClient);
 #[cfg(feature = "reqwest")]
 impl ReqwestHttpClient {
-	/// Wraps an existing reqwest [`Client`].
-	pub fn with_client(client: Client) -> Self {
+	/// Wraps an existing reqwest [`ReqwestClient`].
+	pub fn with_client(client: ReqwestClient) -> Self {
 		Self(client)
 	}
 
@@ -122,14 +118,14 @@ impl ReqwestHttpClient {
 	}
 }
 #[cfg(feature = "reqwest")]
-impl AsRef<Client> for ReqwestHttpClient {
-	fn as_ref(&self) -> &Client {
+impl AsRef<ReqwestClient> for ReqwestHttpClient {
+	fn as_ref(&self) -> &ReqwestClient {
 		&self.0
 	}
 }
 #[cfg(feature = "reqwest")]
 impl Deref for ReqwestHttpClient {
-	type Target = Client;
+	type Target = ReqwestClient;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -139,12 +135,12 @@ impl Deref for ReqwestHttpClient {
 #[cfg(feature = "reqwest")]
 /// Instrumented adapter that implements [`AsyncHttpClient`] for reqwest.
 pub(crate) struct InstrumentedHttpClient {
-	client: Client,
+	client: ReqwestClient,
 	slot: ResponseMetadataSlot,
 }
 #[cfg(feature = "reqwest")]
 impl InstrumentedHttpClient {
-	fn new(client: Client, slot: ResponseMetadataSlot) -> Self {
+	fn new(client: ReqwestClient, slot: ResponseMetadataSlot) -> Self {
 		Self { client, slot }
 	}
 }
@@ -155,7 +151,7 @@ impl InstrumentedHttpClient {
 pub struct InstrumentedHandle(Arc<InstrumentedHttpClient>);
 #[cfg(feature = "reqwest")]
 impl InstrumentedHandle {
-	fn new(client: Client, slot: ResponseMetadataSlot) -> Self {
+	fn new(client: ReqwestClient, slot: ResponseMetadataSlot) -> Self {
 		Self(Arc::new(InstrumentedHttpClient::new(client, slot)))
 	}
 }

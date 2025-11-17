@@ -8,7 +8,7 @@ license     = "GPL-3.0"
 name        = "oauth2-broker"
 readme      = "README.md"
 repository  = "https://github.com/hack-ink/oauth2-broker"
-version     = "0.1.0"
+version     = "0.1.2"
 
 [profile.ci-dev]
 incremental = false

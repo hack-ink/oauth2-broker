@@ -29,7 +29,6 @@ base64              = { version = "0.22" }
 oauth2              = { version = "5.0", default-features = false }
 parking_lot         = { version = "0.12" }
 rand                = { version = "0.9" }
-reqwest             = { version = "0.12", optional = true, default-features = false, features = ["charset", "http2", "rustls-tls"] }
 serde               = { version = "1.0", features = ["derive"] }
 serde_json          = { version = "1.0" }
 serde_path_to_error = { version = "0.1" }
@@ -39,6 +38,7 @@ time                = { version = "0.3", features = ["macros", "parsing", "serde
 url                 = { version = "2.5" }
 # crates.io optional
 metrics = { version = "0.24", optional = true }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["charset", "http2", "rustls-tls"] }
 tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]

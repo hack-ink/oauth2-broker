@@ -4,36 +4,90 @@
 
 Rust’s turnkey OAuth 2.0 broker—spin up multi-tenant flows, CAS-smart token stores, and transport-aware observability in one crate built for production.
 
-[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Docs](https://img.shields.io/docsrs/oauth2-broker)](https://docs.rs/oauth2-broker)
+[![Rust](https://github.com/hack-ink/oauth2-broker/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/hack-ink/oauth2-broker/actions/workflows/rust.yml)
+[![Release](https://github.com/hack-ink/oauth2-broker/actions/workflows/release.yml/badge.svg)](https://github.com/hack-ink/oauth2-broker/actions/workflows/release.yml)
+[![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/hack-ink/oauth2-broker)](https://github.com/hack-ink/oauth2-broker/tags)
+[![GitHub last commit](https://img.shields.io/github/last-commit/hack-ink/oauth2-broker?color=red&style=plastic)](https://github.com/hack-ink/oauth2-broker)
+[![GitHub code lines](https://tokei.rs/b1/github/hack-ink/oauth2-broker)](https://github.com/hack-ink/oauth2-broker)
 
 </div>
 
+## Table of Contents
+
+- [Why oauth2-broker?](#why-oauth2-broker)
+- [Overview](#overview)
+- [Quickstart](#quickstart)
+- [Module Layout](#module-layout)
+- [Broker Capabilities](#broker-capabilities)
+- [Custom HTTP Transports](#custom-http-transports)
+- [Feature Flags](#feature-flags)
+- [Extension Traits](#extension-traits)
+- [Observability](#observability)
+- [Examples & Further Reading](#examples--further-reading)
+- [Development Guardrails](#development-guardrails)
+- [Support Me](#support-me)
+- [Appreciation](#appreciation)
+- [Additional Acknowledgements](#additional-acknowledgements)
+
+## Why oauth2-broker?
+
+- **Industry-grade OAuth 2.0 broker for Rust** — The ecosystem lacks a turnkey, multi-tenant token
+  broker, forcing teams to rebuild authorization code, refresh, and service-to-service flows from
+  scratch. This crate fills that gap with the explicit goal of delivering an industry-level control
+  plane for OAuth clients.
+- **Flow orchestration baked in** — `Broker::start_authorization`, `Broker::exchange_code`,
+  `Broker::refresh_access_token`, and `Broker::client_credentials` already coordinate state, PKCE,
+  caching, and persistence so product code can focus on user experience instead of grant semantics.
+- **Deterministic storage + concurrency** — The `BrokerStore` trait, `MemoryStore`, `FileStore`,
+  singleflight guard helpers, and `CachedTokenRequest` windows keep token records consistent while
+  letting downstream crates plug in Redis, SQL, or bespoke backends without touching flow logic.
+- **Pluggable HTTP + error mapping** — `TokenHttpClient`, `ReqwestHttpClient`,
+  `Broker::with_http_client`, and `ResponseMetadataSlot` isolate transport wiring while
+  `TransportErrorMapper` keeps error classification observable and stack-agnostic.
+- **Operational visibility by default** — `FlowSpan`, `FlowOutcome`, `RefreshMetrics`, and
+  provider-aware descriptors emit structured traces, counters, and tenant/provider labels so SREs
+  can enforce budgets and SLAs without bolting on custom instrumentation.
+
 ## Overview
 
-This repository tracks the MVP work for a single crate named `oauth2-broker`. The near-term
-goal is to surface stable public traits that future tasks (providers, flows, storage) can build
-on. Task **R-0002** establishes the crate layout and the HTTP abstraction:
+`oauth2-broker` exposes a `Broker<C, M>` facade that coordinates OAuth 2.0 flows for a single
+`ProviderDescriptor`. Each broker instance owns the token store (`BrokerStore`), provider strategy,
+HTTP client, and transport error mapper, so callers inject tenant/principal/scope context while the
+crate reuses shared connection pools and descriptor metadata. Under the hood the crate drives the
+upstream `oauth2` client through the `BasicFacade`, layering caching, concurrency control, and
+observability on top.
 
-- Every public module listed in `docs/DESIGN.md` is scaffolded in `src/lib.rs` so follow-up tasks
-  have a place to land.
-- The broker owns a `TokenHttpClient` implementation (reqwest by default) plus its
-  `TransportErrorMapper`, so downstream code never has to wire or configure HTTP transports unless
-  they intentionally opt into an alternate stack.
-- A crate-owned `HttpResponse` type keeps `reqwest` out of public signatures while flows reuse the
-  reqwest-backed helper methods internally.
-- The broker automatically provisions its default reqwest client so downstream crates only manage
-  the descriptor, store, and provider strategy handles.
-- Every transport records HTTP metadata in a shared slot, allowing `TransportErrorMapper`
-  implementors to classify errors without guessing at status codes or retry hints.
+The current codebase ships production-ready implementations for the flows already wired inside
+`src/flows/`:
 
-All broker-managed flows (Authorization Code + PKCE, Refresh Token, Client Credentials) now execute
-through the upstream `oauth2` crate. The crate's request builders are invoked through an internal
-facade that feeds on `ProviderDescriptor` data, so the store, singleflight guards, and provider
-strategies keep their existing responsibilities untouched. When integrators call
-`Broker::with_http_client`, they provide both a `TokenHttpClient` implementation (the crate ships
-`ReqwestHttpClient`) and a matching `TransportErrorMapper` so the `oauth2` executors reuse their
-connection pools, middlewares, and TLS settings while error classification stays transport-aware.
+- `Broker::start_authorization` and `Broker::exchange_code` wrap Authorization Code + PKCE,
+  generating state, PKCE pairs, and storing `TokenRecord` values after exchanging the returned
+  `code`.
+- `Broker::refresh_access_token` rotates refresh secrets via `BrokerStore::compare_and_swap_refresh`,
+  records metrics through `RefreshMetrics`, and removes revoked tokens when providers return
+  `invalid_grant`.
+- `Broker::client_credentials` reuses cached service-to-service tokens, enforces jittered expiry
+  windows via `CachedTokenRequest`, and uses per-`StoreKey` singleflight guards so concurrent
+  callers ride the same refresh.
+
+Caching and persistence are abstracted behind the `BrokerStore` trait, with in-tree backends for an
+in-memory `MemoryStore` and a JSON-backed `FileStore`. Stores expose compare-and-swap refresh
+semantics, revocation helpers, and a stable `StoreKey` fingerprint so downstream crates can add
+Redis or SQL implementations without touching the flow code.
+
+HTTP behavior is centralized in `TokenHttpClient` and `TransportErrorMapper`. The crate ships
+`ReqwestHttpClient` plus `ReqwestTransportErrorMapper`, and any caller can replace them via
+`Broker::with_http_client` to reuse custom TLS, retry, or proxy stacks. Each token request carries a
+`ResponseMetadataSlot`, giving error mappers access to HTTP status codes and `Retry-After` hints
+when translating transport failures.
+
+Observability hooks live under `obs/`: every flow emits `FlowSpan` traces and success/attempt/failure
+counters, while refresh operations also increment `RefreshMetrics`. Provider quirks and client-auth
+rules are modeled by `ProviderDescriptor`, `GrantType`, and `ProviderStrategy`, so higher-level
+systems configure descriptor data and then let the broker enforce those rules consistently across
+every flow.
 
 ## Quickstart
 
@@ -50,34 +104,34 @@ use url::Url;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    color_eyre::install()?;
+	color_eyre::install()?;
 
-    let store: Arc<dyn BrokerStore> = Arc::new(MemoryStore::default());
-    let strategy: Arc<dyn ProviderStrategy> = Arc::new(DefaultProviderStrategy);
+	let store: Arc<dyn BrokerStore> = Arc::new(MemoryStore::default());
+	let strategy: Arc<dyn ProviderStrategy> = Arc::new(DefaultProviderStrategy);
 
-    let descriptor = ProviderDescriptor::builder(ProviderId::new("demo-provider")?)
-        .authorization_endpoint(Url::parse("https://provider.example.com/authorize")?)
-        .token_endpoint(Url::parse("https://provider.example.com/token")?)
-        .support_grants([
-            GrantType::AuthorizationCode,
-            GrantType::RefreshToken,
-            GrantType::ClientCredentials,
-        ])
-        .build()?;
+	let descriptor = ProviderDescriptor::builder(ProviderId::new("demo-provider")?)
+		.authorization_endpoint(Url::parse("https://provider.example.com/authorize")?)
+		.token_endpoint(Url::parse("https://provider.example.com/token")?)
+		.support_grants([
+			GrantType::AuthorizationCode,
+			GrantType::RefreshToken,
+			GrantType::ClientCredentials,
+		])
+		.build()?;
 
-    let broker = Broker::new(store, descriptor, strategy, "demo-client")
-        .with_client_secret("demo-secret");
+	let broker = Broker::new(store, descriptor, strategy, "demo-client")
+		.with_client_secret("demo-secret");
 
-    let scope = ScopeSet::new(["email.read", "profile.read"])?;
-    let request = CachedTokenRequest::new(
-        TenantId::new("tenant-acme")?,
-        PrincipalId::new("svc-router")?,
-        scope,
-    );
+	let scope = ScopeSet::new(["email.read", "profile.read"])?;
+	let request = CachedTokenRequest::new(
+		TenantId::new("tenant-acme")?,
+		PrincipalId::new("svc-router")?,
+		scope,
+	);
 
 	let record = broker.client_credentials(request).await?;
 	println!("access token: {}", record.access_token.expose());
-    Ok(())
+	Ok(())
 }
 ```
 
@@ -208,13 +262,13 @@ it directly:
 
 ```rust
 pub trait TransportErrorMapper<E>: Send + Sync + 'static {
-    fn map_transport_error(
-        &self,
-        strategy: &dyn ProviderStrategy,
-        grant: GrantType,
-        metadata: Option<&ResponseMetadata>,
-        error: HttpClientError<E>,
-    ) -> oauth2_broker::error::Error;
+	fn map_transport_error(
+		&self,
+		strategy: &dyn ProviderStrategy,
+		grant: GrantType,
+		metadata: Option<&ResponseMetadata>,
+		error: HttpClientError<E>,
+	) -> oauth2_broker::error::Error;
 }
 ```
 
@@ -289,8 +343,8 @@ oauth2-broker = { version = "0.0.1", features = ["tracing", "metrics"] }
     ```rust
     #[cfg(feature = "tracing")]
     {
-        use oauth2_broker::obs::{FlowKind, FlowSpan};
-        let _guard = FlowSpan::new(FlowKind::AuthorizationCode, "my_adapter").entered();
+    	use oauth2_broker::obs::{FlowKind, FlowSpan};
+    	let _guard = FlowSpan::new(FlowKind::AuthorizationCode, "my_adapter").entered();
     }
     ```
 
@@ -301,8 +355,8 @@ oauth2-broker = { version = "0.0.1", features = ["tracing", "metrics"] }
     ```rust
     #[cfg(feature = "metrics")]
     {
-        use oauth2_broker::obs::{record_flow_outcome, FlowKind, FlowOutcome};
-        record_flow_outcome(FlowKind::ClientCredentials, FlowOutcome::Attempt);
+    	use oauth2_broker::obs::{record_flow_outcome, FlowKind, FlowOutcome};
+    	record_flow_outcome(FlowKind::ClientCredentials, FlowOutcome::Attempt);
     }
     ```
 
@@ -328,6 +382,39 @@ Set up your preferred `tracing` subscriber and `metrics` recorder (for example,
 The tests cover the reqwest-backed flows against an `httpmock` server plus the
 authorization, refresh, and client-credentials flows end to end.
 
-## License
+## Support Me
 
-Licensed under [GPL-3.0](LICENSE).
+If you find this project helpful and would like to support its development, you can buy me a coffee!
+
+Your support is greatly appreciated and motivates me to keep improving this project.
+
+- **Fiat**
+    - [Ko-fi](https://ko-fi.com/hack_ink)
+    - [爱发电](https://afdian.com/a/hack_ink)
+- **Crypto**
+    - **Bitcoin**
+        - `bc1pedlrf67ss52md29qqkzr2avma6ghyrt4jx9ecp9457qsl75x247sqcp43c`
+    - **Ethereum**
+        - `0x3e25247CfF03F99a7D83b28F207112234feE73a6`
+    - **Polkadot**
+        - `156HGo9setPcU2qhFMVWLkcmtCEGySLwNqa3DaEiYSWtte4Y`
+
+Thank you for your support!
+
+## Appreciation
+
+We would like to extend our heartfelt gratitude to the following projects and contributors:
+
+Grateful for the Rust community and the maintainers of `reqwest`, `oauth2`, `metrics`, and `tracing`, whose work makes this cache possible.
+
+## Additional Acknowledgements
+
+- TODO
+
+<div align="right">
+
+### License
+
+<sup>Licensed under [GPL-3.0](LICENSE).</sup>
+
+</div>

@@ -64,8 +64,6 @@ pub mod _preludet {
 	}
 }
 
-#[cfg(test)] use {color_eyre as _, httpmock as _};
-
 mod _prelude {
 	pub use std::{
 		collections::{BTreeMap, HashMap, hash_map::DefaultHasher},
@@ -91,3 +89,5 @@ mod _prelude {
 
 pub use reqwest;
 pub use url;
+
+#[cfg(test)] use {color_eyre as _, httpmock as _};

@@ -1,14 +1,13 @@
 [package]
 authors     = ["Xavier Lau <x@acg.box>"]
-build       = "build.rs"
-description = "<DESCRIPTION>"
+categories  = ["asynchronous", "authentication", "config", "network-programming", "web-programming::http-client"]
+description = "Rust's turnkey OAuth 2.0 broker - spin up multi-tenant flows, CAS-smart token stores, and transport-aware observability in one crate built for production."
 edition     = "2024"
-homepage    = "https://hack.ink/<NAME>"
+keywords    = ["async", "broker", "oauth2", "reqwest", "token"]
 license     = "GPL-3.0"
-name        = "rust-initializer"
+name        = "oauth2-broker"
 readme      = "README.md"
-repository  = "https://github.com/hack-ink/<NAME>"
-resolver    = "3"
+repository  = "https://github.com/hack-ink/oauth2-broker"
 version     = "0.1.0"
 
 [profile.ci-dev]
@@ -20,18 +19,30 @@ inherits = "release"
 lto      = true
 
 [features]
-dev = []
-
-[build-dependencies]
-# crates.io
-vergen-gitcl = { version = "1.0", features = ["cargo"] }
+default = []
+test    = []
 
 [dependencies]
 # crates.io
-anyhow             = { version = "1.0" }
-app_dirs2          = { version = "2.5" }
-clap               = { version = "4.5", features = ["derive"] }
-color-eyre         = { version = "0.6" }
-tracing            = { version = "0.1" }
-tracing-appender   = { version = "0.2" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-lock          = { version = "3.4" }
+base64              = { version = "0.22" }
+oauth2              = { version = "5.0", default-features = false }
+parking_lot         = { version = "0.12" }
+rand                = { version = "0.9" }
+reqwest             = { version = "0.12", default-features = false, features = ["charset", "http2", "rustls-tls"] }
+serde               = { version = "1.0", features = ["derive"] }
+serde_json          = { version = "1.0" }
+serde_path_to_error = { version = "0.1" }
+sha2                = { version = "0.10" }
+thiserror           = { version = "2.0" }
+time                = { version = "0.3", features = ["macros", "parsing", "serde"] }
+url                 = { version = "2.5" }
+# crates.io optional
+metrics = { version = "0.24", optional = true }
+tracing = { version = "0.1", optional = true }
+
+[dev-dependencies]
+# crates.io
+color-eyre = { version = "0.6" }
+httpmock   = { version = "0.8", features = ["https"] }
+tokio      = { version = "1.48", features = ["macros", "rt-multi-thread", "time"] }

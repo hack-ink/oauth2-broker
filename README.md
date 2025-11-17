@@ -405,7 +405,7 @@ Thank you for your support!
 
 We would like to extend our heartfelt gratitude to the following projects and contributors:
 
-Grateful for the Rust community and the maintainers of `reqwest`, `oauth2`, `metrics`, and `tracing`, whose work makes this cache possible.
+Grateful for the Rust community and the maintainers of `reqwest`, `oauth2`, `metrics`, and `tracing`, whose work makes this broker possible.
 
 ## Additional Acknowledgements
 

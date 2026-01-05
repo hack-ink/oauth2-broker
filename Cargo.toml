@@ -48,7 +48,7 @@ tracing = { version = "0.1", optional = true }
 # crates.io
 color-eyre = { version = "0.6" }
 httpmock   = { version = "0.8", features = ["https"] }
-tokio      = { version = "1.48", features = ["macros", "rt-multi-thread", "time"] }
+tokio      = { version = "1.49", features = ["macros", "rt-multi-thread", "time"] }
 
 [[example]]
 name              = "client_credentials"
